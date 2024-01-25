@@ -18,3 +18,4 @@ from requests import request
 URL = "https://arkmap.vattenfalleldistribution.se/incidents.json"
 
 resp = request(url=URL, method="GET").json()
+
