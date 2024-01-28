@@ -42,7 +42,7 @@ class EllevioScraper:
         endTime: str,
         infoText: str,
         lastUpdate: str,
-        affected_customers: int
+        affected_customers: int,
     ) -> dict:
         outage = {
             "municipality": municipality,
@@ -50,7 +50,7 @@ class EllevioScraper:
             "end_time": endTime,
             "info_text": infoText,
             "last_update": lastUpdate,
-            "affected_customers": affected_customers
+            "affected_customers": affected_customers,
         }
 
         logging.info(f"Outage dict created: {outage}")
@@ -74,13 +74,13 @@ class EllevioScraper:
     def __TakeScreenShot(self, fileName, x, y, w, h):
         logging.info("Taking ScreenShot")
 
-        self.Driver.save_screenshot(fileName + ".png")
-        im = Image.open(fileName + ".png")
+        self.Driver.save_screenshot("./screenshots/" + fileName + ".png")
+        im = Image.open("./screenshots/" + fileName + ".png")
         im = im.crop((x, y, w, h))
-        im.save(fileName + ".png")
+        im.save("./screenshots/" + fileName + ".png")
 
     def __Sleep(self, secs: int):
-        logging.info("Sleeping 1 sec so the page can load")
+        logging.info(f"Sleeping {secs} sec so the page can load")
         time.sleep(secs)
 
     def __DriverGet(self, url: str):
@@ -114,7 +114,6 @@ class EllevioScraper:
             county = county.split(" ")[0].rstrip("s").lower()
             self.CountiesWithOutage.append(county)
 
-
         logging.info(
             f"There are a total of {len(self.CountiesWithOutage)} counties with outages"
         )
@@ -137,10 +136,9 @@ class EllevioScraper:
             municipality_rows.pop(0)
             municipality_rows.pop(len(municipality_rows) - 1)
 
-
             for municipality in self.__GetPlaceNameWithOutages(municipality_rows):
-                    self.MunicipalitiesWithOutage.append(municipality.lower())
-        
+                self.MunicipalitiesWithOutage.append(municipality.lower())
+
         logging.info(
             f"There are a total of {len(self.MunicipalitiesWithOutage)} municipalities with outages"
         )
@@ -176,36 +174,52 @@ class EllevioScraper:
                 by=By.TAG_NAME, value="div"
             )
 
-            start_time, end_time, affected_customers, info_text, last_update = self.__ExtractOutageInfo(info_container_divs)
+            (
+                start_time,
+                end_time,
+                affected_customers,
+                info_text,
+                last_update,
+            ) = self.__ExtractOutageInfo(info_container_divs)
 
             self.Outages.append(
                 self.__CreateOutageDict(
-                    municipality, start_time, end_time, info_text, last_update, affected_customers
+                    municipality,
+                    start_time,
+                    end_time,
+                    info_text,
+                    last_update,
+                    affected_customers,
                 )
             )
 
     def __ExtractOutageInfo(self, info_container_divs):
         start_time = info_container_divs[0].text.split(":")[1].strip(" ")
         end_time = info_container_divs[1].text.split(":")[1].strip(" ")
-        affected_customers = info_container_divs[2].text.split(":")[1].strip(" ").split(" ")[0]
+        affected_customers = (
+            info_container_divs[2].text.split(":")[1].strip(" ").split(" ")[0]
+        )
 
         info_text = self.Driver.find_element(
-                by=By.CLASS_NAME, value="InterruptInfo_customerInformationText__2hO59"
-            ).text
+            by=By.CLASS_NAME, value="InterruptInfo_customerInformationText__2hO59"
+        ).text
 
         last_update = self.Driver.find_element(
-                by=By.CLASS_NAME, value="InfoBox_lastUpdatedText__1-6ip"
-            ).text
-        
-        logging.debug(f'start_time={start_time} end_time={end_time} affected_customers={affected_customers} info_text={info_text} last_update={last_update}')
-        return start_time,end_time,int(affected_customers),info_text,last_update
+            by=By.CLASS_NAME, value="InfoBox_lastUpdatedText__1-6ip"
+        ).text
+
+        logging.debug(
+            f"start_time={start_time} end_time={end_time} affected_customers={affected_customers} info_text={info_text} last_update={last_update}"
+        )
+        return start_time, end_time, int(affected_customers), info_text, last_update
 
     def __AcceptCookies(self):
         try:
             accept_btn = self.Driver.find_element(
-                    by=By.ID,
-                    value="CybotCookiebotDialogBodyLevelButtonLevelOptinAllowAll",
-                )
+                by=By.ID,
+                value="CybotCookiebotDialogBodyLevelButtonLevelOptinAllowAll",
+            )
+            logging.info("Accepting Cookies!")
             accept_btn.click()
 
             logging.info("Waiting 1 sec for cookie popup to go away")
@@ -228,9 +242,8 @@ class EllevioScraper:
 
     def RunScraper(self, interval: int = 60):
         if interval < 60:
-            interval = 60
             logging.warning(
-                f"Run interval is less then 60 seconds, setting to {interval}!"
+                f"Run interval is less then 60 seconds! There is a a large chance that you will get blocked or rate limited"
             )
 
         while True:
@@ -240,12 +253,16 @@ class EllevioScraper:
             self.MunicipalitiesWithOutage = []
             self.Outages = []
 
-            logging.info("Starting to fetch data from ELLEVIO")
-            self.GetCountiesWithOutage()
-            self.GetMunicipalitiesWithOutage()
-            self.GetOutages()
-            self.SaveOutagesToFile()
-
+            try:
+                logging.info("Starting to fetch data from ELLEVIO")
+                self.GetCountiesWithOutage()
+                self.GetMunicipalitiesWithOutage()
+                self.GetOutages()
+                self.SaveOutagesToFile()
+            except NoSuchElementException as nsee:
+                logging.warning("Unable to find specified element")
+                logging.error(nsee)
+                self.__Sleep(120)
             logging.info(f"Sleeping for {interval} seconds to not get rate limited")
             time.sleep(interval)
 
@@ -255,16 +272,13 @@ from datetime import datetime
 
 if __name__ == "__main__":
     now = datetime.now()
-    formatted_date = now.strftime('%Y-%m-%d-%H:%M:%S')
-
-
-    
+    formatted_date = now.strftime("%Y-%m-%d-%H:%M:%S")
 
     logging.basicConfig(
         format="[%(asctime)s] %(levelname)-8s line:%(lineno)-4s %(funcName)-30s  - %(message)s",
         datefmt="%d-%b-%y %H:%M:%S",
         level=logging.INFO,
-        filename=f'{formatted_date}.log',
+        filename=f"{formatted_date}.log",
     )
 
     interval = 60
